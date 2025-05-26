@@ -118,7 +118,7 @@ valid_o <<= pyrtl.select(state == l2, val_bit, pyrtl.Const(0))
 
 
 ref_o <<= pyrtl.select(state == l2, ref_bit, pyrtl.Const(0))
-readable_o <<= pyrtl.select(state == l2, rd_bit, pyrtl.Const(0))
+#readable_o <<= pyrtl.select(state == l2, rd_bit, pyrtl.Const(0))
 finished_walk_o <<= (state == l2) | page_fault_logic
 
 
