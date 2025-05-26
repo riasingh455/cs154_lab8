@@ -1,5 +1,5 @@
 import pyrtl
-main_memory = pyrtl.MemBlock(bitwidth=32, addrwidth=32, name="main_mem")
+main_memory = pyrtl.MemBlock(bitwidth=32, addrwidth=32, name="main_mem", asynchronous=True)
 virtual_addr_i = pyrtl.Input(bitwidth=32, name="virtual_addr_i")
 new_req_i = pyrtl.Input(bitwidth=1, name="new_req_i")
 reset_i = pyrtl.Input(bitwidth=1, name="reset_i")
@@ -87,32 +87,39 @@ rd_bit = read_data[29]
 dirt = read_data[28]    
 ref_bit = read_data[27]     
 
-# page_fault_logic = (~val_bit) & (state != initial)
-page_fault_logic = (~val_bit) & (state == l1) 
+page_fault_logic = (~val_bit) & (state != initial)
+#page_fault_logic = (~val_bit) & (state == l1) 
 page_fault <<= page_fault_logic    
 
 write_err = (state == l2) & req_type_i & (~wr_bit) 
 read_err = (state == l2) & (~req_type_i) & (~rd_bit)
 
 
-err_code = pyrtl.WireVector(3, name='err_code')
-err_code <<= pyrtl.select(page_fault_logic, pyrtl.Const(0b001, 3), pyrtl.select(write_err,  pyrtl.Const(0b010, 3), pyrtl.select(read_err, pyrtl.Const(0b100, 3),pyrtl.Const(0b000, 3))))
+# err_code = pyrtl.WireVector(3, name='err_code')
+# err_code <<= pyrtl.select(page_fault_logic, pyrtl.Const(0b001, 3), pyrtl.select(write_err,  pyrtl.Const(0b010, 3), pyrtl.select(read_err, pyrtl.Const(0b100, 3),pyrtl.Const(0b000, 3))))
 
-err_code_reg = pyrtl.Register(3, name='err_code_reg')
-with pyrtl.conditional_assignment:
-    with new_req_i:
-        err_code_reg.next |= pyrtl.Const(0)      
-    with (state == l2) | page_fault_logic:      
-        err_code_reg.next |= err_code
-    with ~( (state == l2) | page_fault_logic | new_req_i ):
-        err_code_reg.next |= err_code_reg  
+# err_code_reg = pyrtl.Register(3, name='err_code_reg')
+# with pyrtl.conditional_assignment:
+#     with new_req_i:
+#         err_code_reg.next |= pyrtl.Const(0)      
+#     with (state == l2) | page_fault_logic:      
+#         err_code_reg.next |= err_code
+#     with ~( (state == l2) | page_fault_logic | new_req_i ):
+#         err_code_reg.next |= err_code_reg  
 
-error_code_o <<= err_code_reg  
+# error_code_o <<= err_code_reg  
+err_code = ( page_fault_logic & pyrtl.Const(0b001, 3) ) | \
+           ( write_err        & pyrtl.Const(0b010, 3) ) | \
+           ( read_err         & pyrtl.Const(0b100, 3) )
+#error_code_o <<= err_code 
+error_code_o <<= pyrtl.select(reset_i, pyrtl.Const(0, 3), err_code) 
 
 phys_addr = pyrtl.concat(paddr, offset3)
-dub = (state == l2) & (err_code == 0)      
 
-physical_addr_o <<= pyrtl.select(dub, phys_addr, pyrtl.Const(0, 32))
+# dub = (state == l2) & (err_code_reg == 0)      
+# physical_addr_o <<= pyrtl.select(dub, phys_addr, pyrtl.Const(0, 32))
+valid_translate = (state == l2) & (err_code == 0)
+physical_addr_o <<= pyrtl.select(valid_translate, phys_addr, pyrtl.Const(0, 32))
 
 dirty_o <<= pyrtl.select(state == l2, dirt, pyrtl.Const(0))
 valid_o <<= pyrtl.select(state == l2, val_bit, pyrtl.Const(0))
@@ -120,7 +127,8 @@ valid_o <<= pyrtl.select(state == l2, val_bit, pyrtl.Const(0))
 
 ref_o <<= pyrtl.select(state == l2, ref_bit, pyrtl.Const(0))
 readable_o <<= pyrtl.select(state == l2, rd_bit, pyrtl.Const(0))
-finished_walk_o <<= (state == l2) | page_fault_logic
+#finished_walk_o <<= (state == l2) | page_fault_logic
+finished_walk_o <<= pyrtl.select(reset_i, pyrtl.Const(0), (state == l2) | page_fault_logic)
 
 
 
