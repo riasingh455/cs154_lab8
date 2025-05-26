@@ -5,7 +5,7 @@ new_req_i = pyrtl.Input(bitwidth=1, name="new_req_i")
 reset_i = pyrtl.Input(bitwidth=1, name="reset_i")
 req_type_i = pyrtl.Input(bitwidth=1, name="req_type_i")
 physical_addr_o = pyrtl.Output(bitwidth=32,name="physical_addr_o")
-dirt_o = pyrtl.Output(bitwidth=1, name="dirt_o")
+dirty_o = pyrtl.Output(bitwidth=1, name="dirty_o")
 valid_o = pyrtl.Output(bitwidth=1, name="valid_o")
 ref_o = pyrtl.Output(bitwidth=1, name="ref_o")
 error_code_o = pyrtl.Output(bitwidth=3, name="error_code_o")
@@ -113,7 +113,7 @@ dub = (state == l2) & (err_code == 0)
 
 physical_addr_o <<= pyrtl.select(dub, phys_addr, pyrtl.Const(0, 32))
 
-dirt_o <<= pyrtl.select(state == l2, dirt, pyrtl.Const(0))
+dirty_o <<= pyrtl.select(state == l2, dirt, pyrtl.Const(0))
 valid_o <<= pyrtl.select(state == l2, val_bit, pyrtl.Const(0))
 
 
@@ -149,5 +149,5 @@ if __name__ == "__main__":
     sim_trace.render_trace(symbol_len=20)
     assert (sim_trace.trace["physical_addr_o"][-2] == 0x61d26db3)
     assert (sim_trace.trace["error_code_o"][-2] == 0x0)
-    assert (sim_trace.trace["dirt_o"][-2] == 0x0)
+    assert (sim_trace.trace["dirty_o"][-2] == 0x0)
     assert (sim_trace.trace["readable_o"][-2] == 0x1)
