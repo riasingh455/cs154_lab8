@@ -14,6 +14,8 @@ page_fault = pyrtl.WireVector(bitwidth=1, name="page_fault")
 state = pyrtl.Register(bitwidth=2, name="state")
 base_register = pyrtl.Const(0x3FFBFF, bitwidth=22)
 
+readable_o = pyrtl.Output(bitwidth=1, name="readable_o")
+writable_o = pyrtl.Output(bitwidth=1, name="writable_o")
 #add this 
 #readable_o = pyrtl.Output(bitwidth=1, name="readable_o")
 # Step 1 : Split input into the three offsets
@@ -124,6 +126,9 @@ valid_o <<= pyrtl.select(state == l2, val_bit, pyrtl.Const(0))
 
 
 ref_o <<= pyrtl.select(state == l2, ref_bit, pyrtl.Const(0))
+
+readable_o <<= pyrtl.select(state == l2, rd_bit, pyrtl.Const(0))
+writable_o <<= pyrtl.select(state == l2, wr_bit, pyrtl.Const(0))
 #readable_o <<= pyrtl.select(state == l2, rd_bit, pyrtl.Const(0))
 #finished_walk_o <<= (state == l2) | page_fault_logic
 finished_walk_o <<= pyrtl.select(reset_i, pyrtl.Const(0), (state == l2) | page_fault_logic)
@@ -157,4 +162,7 @@ if __name__ == "__main__":
     assert (sim_trace.trace["physical_addr_o"][-2] == 0x61d26db3)
     assert (sim_trace.trace["error_code_o"][-2] == 0x0)
     assert (sim_trace.trace["dirty_o"][-2] == 0x0)
+    
+    assert out['readable_o'] == ((exp_err & 0b100) == 0)
+    assert out['writable_o'] == ((exp_err & 0b010) == 0)
     #assert (sim_trace.trace["readable_o"][-2] == 0x1)
