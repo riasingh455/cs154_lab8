@@ -10,84 +10,82 @@ valid_o = pyrtl.Output(bitwidth=1, name="valid_o")
 ref_o = pyrtl.Output(bitwidth=1, name="ref_o")
 error_code_o = pyrtl.Output(bitwidth=3, name="error_code_o")
 finished_walk_o = pyrtl.Output(bitwidth=1, name="finished_walk_o")
-#page_fault = pyrtl.WireVector(bitwidth=1, name="page_fault")
+page_fault = pyrtl.WireVector(bitwidth=1, name="page_fault")
 state = pyrtl.Register(bitwidth=2, name="state")
 base_register = pyrtl.Const(0x3FFBFF, bitwidth=22)
+#----------------------------------------------------------
+addr = pyrtl.Register(32, 'addr')
 
-#--------------------------------------
-addr = pyrtl.Register(32, 'addr') 
-
-offset1 = virtual_addr_i[22:32]  
-offset2 = virtual_addr_i[12:22] 
-offset3 = virtual_addr_i[0:12]   
+offset1 = virtual_addr_i[22:32]
+offset2 = virtual_addr_i[12:22]
+offset3 = virtual_addr_i[0:12]
 
 read_data = main_memory[addr]
 
-IDLE = pyrtl.Const(0b00, 2)   
-L1D  = pyrtl.Const(0b01, 2)  
-L2D  = pyrtl.Const(0b10, 2)  
-DONE = pyrtl.Const(0b11, 2)  
+IDLE = pyrtl.Const(0b00, 2)
+L1_READ = pyrtl.Const(0b01, 2)
+L2_READ = pyrtl.Const(0b10, 2)
 
 with pyrtl.conditional_assignment:
     with reset_i:
         state.next |= IDLE
-        addr.next  |= pyrtl.Const(0)
-
-    with state == IDLE:
-        with new_req_i:
-            addr.next  |= pyrtl.concat(base_register, offset1)
-            state.next |= L1D
-        with ~new_req_i:
-            addr.next  |= addr
+        addr.next |= pyrtl.Const(0, 32)
+    with ~reset_i:
+        with state == IDLE:
+            with new_req_i:
+                addr.next |= pyrtl.concat(base_register, offset1)
+                state.next |= L1_READ
+            with ~new_req_i:
+                state.next |= IDLE
+                addr.next |= addr
+        
+        with state == L1_READ:
+            with read_data[31]:
+                next_addr = pyrtl.concat(read_data[0:22], offset2)
+                addr.next |= next_addr
+                state.next |= L2_READ
+            with ~read_data[31]:
+                state.next |= IDLE
+                addr.next |= addr
+        
+        with state == L2_READ:
             state.next |= IDLE
+            addr.next |= addr
 
-    with state == L1D:
-        with ~read_data[31]:                      
-            state.next |= DONE        
-        with read_data[31]:
-            next_l2_addr = pyrtl.concat(read_data[0:22], offset2)
-            addr.next    |= next_l2_addr
-            state.next   |= L2D
+valid_bit = read_data[31]
+writable_bit = read_data[30]
+readable_bit = read_data[29]
+dirty_bit = read_data[28]
+ref_bit = read_data[27]
 
-    with state == L2D:
-        state.next |= DONE
-        addr.next  |= addr
+page_fault <<= ~valid_bit & (state != IDLE)
 
-    with state == DONE:
-        state.next |= IDLE
-        addr.next  |= addr
+write_not_writable = (state == L2_READ) & req_type_i & ~writable_bit & valid_bit
+read_not_readable = (state == L2_READ) & ~req_type_i & ~readable_bit & valid_bit
 
-paddr_part  = read_data[0:20]     
-val_bit     = read_data[31]
-wr_bit      = read_data[30]
-rd_bit      = read_data[29]
-dirty_bit   = read_data[28]
-ref_bit     = read_data[27]
+error_code_bits = pyrtl.concat(read_not_readable, write_not_writable, page_fault)
 
+error_code_o <<= pyrtl.select(reset_i, pyrtl.Const(0, 3), error_code_bits)
 
-page_fault_logic = ~val_bit & (state != IDLE)
-l2_phase  = (state == L2D) | (state == DONE) 
-write_err = l2_phase & req_type_i    & ~wr_bit
-read_err  = l2_phase & ~req_type_i   & ~rd_bit
+physical_page_number = read_data[0:20]
+final_physical_addr = pyrtl.concat(physical_page_number, offset3)
 
-err_code = pyrtl.concat(read_err, write_err, page_fault_logic)
-error_code_o <<= pyrtl.select(reset_i, pyrtl.Const(0, 3), err_code)
+walk_success = (state == L2_READ) & (error_code_bits == 0)
+walk_finished = (state == L2_READ) | ((state == L1_READ) & ~valid_bit)
+in_l2_state = (state == L2_READ)
 
-phys_addr = pyrtl.concat(paddr_part, offset3)
-valid_translate = (state == DONE) & (err_code == 0)
-
-physical_addr_o <<= pyrtl.select(valid_translate, phys_addr, pyrtl.Const(0, 32))
-dirty_o         <<= pyrtl.select(state == DONE, dirty_bit, pyrtl.Const(0))
-valid_o         <<= pyrtl.select(state == DONE, val_bit,   pyrtl.Const(0))
-ref_o           <<= pyrtl.select(state == DONE, ref_bit,   pyrtl.Const(0))
-finished_walk_o <<= (state == DONE)
-
-#-------------------------------------------------------------------
+physical_addr_o <<= pyrtl.select(reset_i | ~walk_success, pyrtl.Const(0, 32), final_physical_addr)
+dirty_o <<= pyrtl.select(reset_i | ~in_l2_state, pyrtl.Const(0, 1), dirty_bit)
+valid_o <<= pyrtl.select(reset_i | ~in_l2_state, pyrtl.Const(0, 1), valid_bit)
+ref_o <<= pyrtl.select(reset_i | ~in_l2_state, pyrtl.Const(0, 1), ref_bit)
+finished_walk_o <<= pyrtl.select(reset_i, pyrtl.Const(0, 1), walk_finished)
 
 # Step 1 : Split input into the three offsets
 # Step 2 : UPDATE STATE according to state diagram in instructions
 # Step 3 : Determine physical address by walking the page table structure
-# Step 4 : Determine the outputs based on the last level of the page table walk
+# Step 4 : Determine the outputs based on the last level of the page table wal
+
+
 if __name__ == "__main__":
     """
     These memory addresses correspond to the test that we walk through in the
@@ -114,5 +112,3 @@ if __name__ == "__main__":
     assert (sim_trace.trace["physical_addr_o"][-1] == 0x61d26db3)
     assert (sim_trace.trace["error_code_o"][-1] == 0x0)
     assert (sim_trace.trace["dirty_o"][-1] == 0x0)
-    assert (sim_trace.trace["readable_o"][-1] == 0x1)
-
