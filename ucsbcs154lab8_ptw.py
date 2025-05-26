@@ -15,7 +15,7 @@ state = pyrtl.Register(bitwidth=2, name="state")
 base_register = pyrtl.Const(0x3FFBFF, bitwidth=22)
 
 #add this 
-#readable_o = pyrtl.Output(bitwidth=1, name="readable_o")
+readable_o = pyrtl.Output(bitwidth=1, name="readable_o")
 # Step 1 : Split input into the three offsets
 
 offset1 = virtual_addr_i[22:32]    
@@ -44,7 +44,7 @@ with pyrtl.conditional_assignment:
                 state.next |= initial
         with state == l1:
             with page_fault:
-                state.next |= initial         
+                state.next |= initial  
             with ~page_fault:
                 state.next |= l2       
         with state == l2:
@@ -87,7 +87,8 @@ rd_bit = read_data[29]
 dirt = read_data[28]    
 ref_bit = read_data[27]     
 
-page_fault_logic = (~val_bit) & (state != initial)
+# page_fault_logic = (~val_bit) & (state != initial)
+page_fault_logic = (~val_bit) & (state == l1) 
 page_fault <<= page_fault_logic    
 
 write_err = (state == l2) & req_type_i & (~wr_bit) 
@@ -106,7 +107,7 @@ with pyrtl.conditional_assignment:
     with ~( (state == l2) | page_fault_logic | new_req_i ):
         err_code_reg.next |= err_code_reg  
 
-error_code_o <<= err_code_reg     
+error_code_o <<= err_code_reg  
 
 phys_addr = pyrtl.concat(paddr, offset3)
 dub = (state == l2) & (err_code == 0)      
@@ -118,7 +119,7 @@ valid_o <<= pyrtl.select(state == l2, val_bit, pyrtl.Const(0))
 
 
 ref_o <<= pyrtl.select(state == l2, ref_bit, pyrtl.Const(0))
-#readable_o <<= pyrtl.select(state == l2, rd_bit, pyrtl.Const(0))
+readable_o <<= pyrtl.select(state == l2, rd_bit, pyrtl.Const(0))
 finished_walk_o <<= (state == l2) | page_fault_logic
 
 
@@ -150,4 +151,4 @@ if __name__ == "__main__":
     assert (sim_trace.trace["physical_addr_o"][-2] == 0x61d26db3)
     assert (sim_trace.trace["error_code_o"][-2] == 0x0)
     assert (sim_trace.trace["dirty_o"][-2] == 0x0)
-    #assert (sim_trace.trace["readable_o"][-2] == 0x1)
+    assert (sim_trace.trace["readable_o"][-2] == 0x1)
