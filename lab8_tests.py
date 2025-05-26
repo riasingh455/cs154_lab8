@@ -18,7 +18,7 @@ def run_walk(virt_addr, memimage, req_type):
     sim = pyrtl.Simulation(tracer=sim_trace,
                            memory_value_map={walker.main_memory: memimage})
 
-    for cyc in range(3):             # new_req high only on cycle 0
+    for cyc in range(4):             # new_req high only on cycle 0
         sim.step({ walker.new_req_i      : 1 if cyc == 0 else 0,
                    walker.reset_i        : 0,
                    walker.virtual_addr_i : virt_addr,
