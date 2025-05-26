@@ -117,17 +117,19 @@
 
 
 import pyrtl
+
 main_memory = pyrtl.MemBlock(bitwidth=32, addrwidth=32, name="main_mem")
 virtual_addr_i = pyrtl.Input(bitwidth=32, name="virtual_addr_i")
 new_req_i = pyrtl.Input(bitwidth=1, name="new_req_i")
 reset_i = pyrtl.Input(bitwidth=1, name="reset_i")
 req_type_i = pyrtl.Input(bitwidth=1, name="req_type_i")
-physical_addr_o = pyrtl.Output(bitwidth=32,name="physical_addr_o")
+physical_addr_o = pyrtl.Output(bitwidth=32, name="physical_addr_o")
 dirty_o = pyrtl.Output(bitwidth=1, name="dirty_o")
 valid_o = pyrtl.Output(bitwidth=1, name="valid_o")
 ref_o = pyrtl.Output(bitwidth=1, name="ref_o")
 error_code_o = pyrtl.Output(bitwidth=3, name="error_code_o")
 finished_walk_o = pyrtl.Output(bitwidth=1, name="finished_walk_o")
+
 page_fault = pyrtl.WireVector(bitwidth=1, name="page_fault")
 state = pyrtl.Register(bitwidth=2, name="state")
 base_register = pyrtl.Const(0x3FFBFF, bitwidth=22)
@@ -135,9 +137,9 @@ base_register = pyrtl.Const(0x3FFBFF, bitwidth=22)
 addr = pyrtl.Register(32, 'addr')
 saved_req_type = pyrtl.Register(1, 'saved_req_type')
 
-offset1 = virtual_addr_i[22:32]
-offset2 = virtual_addr_i[12:22]
-offset3 = virtual_addr_i[0:12]
+offset1 = virtual_addr_i[22:32] 
+offset2 = virtual_addr_i[12:22] 
+offset3 = virtual_addr_i[0:12]  
 
 read_data = main_memory[addr]
 
@@ -162,12 +164,12 @@ with pyrtl.conditional_assignment:
                 saved_req_type.next |= saved_req_type
         
         with state == L1_READ:
-            with read_data[31]:
+            with read_data[31]: 
                 next_addr = pyrtl.concat(read_data[0:22], offset2)
                 addr.next |= next_addr
                 state.next |= L2_READ
                 saved_req_type.next |= saved_req_type
-            with ~read_data[31]:
+            with ~read_data[31]: 
                 state.next |= IDLE
                 addr.next |= addr
                 saved_req_type.next |= saved_req_type
@@ -192,7 +194,7 @@ error_code_bits = pyrtl.concat(read_not_readable, write_not_writable, page_fault
 
 error_code_o <<= pyrtl.select(reset_i, pyrtl.Const(0, 3), error_code_bits)
 
-physical_page_number = read_data[0:20]
+physical_page_number = read_data[0:20]  
 final_physical_addr = pyrtl.concat(physical_page_number, offset3)
 
 walk_success = (state == L2_READ) & (error_code_bits == 0)
@@ -212,21 +214,26 @@ if __name__ == "__main__":
     errors should occur
     """
     memory = {
-        4293918528: 0xC43FFC6B,
-        4294029192: 0xAC061D26,
-        1641180595: 0xDEADBEEF
+        4293918528: 0xC43FFC6B, 
+        4294029192: 0xAC061D26,  
+        1641180595: 0xDEADBEEF 
     }
     sim_trace = pyrtl.SimulationTrace()
-    sim = pyrtl.Simulation(tracer=sim_trace, memory_value_map={main_memory:
-    memory})
-    for i in range(3):
+    sim = pyrtl.Simulation(tracer=sim_trace, memory_value_map={main_memory: memory})
+
+    for i in range(4):  
         sim.step({
-            new_req_i: 1,
+            new_req_i: 1 if i == 0 else 0, 
             reset_i: 0,
             virtual_addr_i: 0xD0388DB3,
             req_type_i: 0
-    })
+        })
+    
     sim_trace.render_trace(symbol_len=20)
-    assert (sim_trace.trace["physical_addr_o"][-1] == 0x61d26db3)
-    assert (sim_trace.trace["error_code_o"][-1] == 0x0)
-    assert (sim_trace.trace["dirty_o"][-1] == 0x0)
+ 
+    assert (sim_trace.trace["physical_addr_o"][2] == 0x61d26db3)
+    assert (sim_trace.trace["error_code_o"][2] == 0x0)
+    assert (sim_trace.trace["dirty_o"][2] == 0x0)
+    assert (sim_trace.trace["finished_walk_o"][2] == 0x1)
+    
+    print("Basic test passed!")
