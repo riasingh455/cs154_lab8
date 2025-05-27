@@ -161,6 +161,7 @@ base_register = pyrtl.Const(0x3FFBFF, bitwidth=22)
 
 addr = pyrtl.Register(bitwidth=32, name="addr")
 saved_req_type_i = pyrtl.Register(bitwidth=1, name="saved_req_type_i")
+final_addr = pyrtl.WireVector(bitwidth=32, name="final_addr")
 
 offset1 = virtual_addr_i[22:32]  
 offset2 = virtual_addr_i[12:22] 
@@ -201,30 +202,30 @@ with pyrtl.conditional_assignment:
                 state.next |= IDLE
                 saved_req_type_i.next |= saved_req_type_i
             with ~page_fault:
-                next_addr = pyrtl.concat(read_data[0:22], offset2)
-                addr.next |= next_addr
+                addr.next |= pyrtl.concat(read_data[0:22], offset2)
                 state.next |= L2_READ
                 saved_req_type_i.next |= saved_req_type_i
         with state == L2_READ:
-            addr.next |= addr
+            #addr.next |= pyrtl.concat(read_data[0:20], offset3)
+            final_addr |= pyrtl.concat(read_data[0:20], offset3)
             state.next |= IDLE
             saved_req_type_i.next |= saved_req_type_i
 
 read_fault = (state == L2_READ) & (~readable_bit) & valid_bit
 write_fault = (state == L2_READ) & saved_req_type_i & (~writable_bit) & valid_bit
 
+#TODO maybe ensure state information during error ouput
 error_bits = pyrtl.concat(read_fault, write_fault, page_fault)
 error_code_o <<= pyrtl.select(reset_i, pyrtl.Const(0, 3), error_bits)
 
-ppn = read_data[0:20] 
-final_phys_addr = pyrtl.concat(ppn, offset3)
+#TODO do read/write faults matter?s
+walk_success = (state == L2_READ) & valid_bit #& (~read_fault) & (~write_fault)
 
-walk_success = (state == L2_READ) & valid_bit & (~read_fault) & (~write_fault)
-physical_addr_o <<= pyrtl.select(reset_i | ~walk_success, pyrtl.Const(0, 32), final_phys_addr)
+physical_addr_o <<= pyrtl.select(reset_i | ~walk_success, pyrtl.Const(0, 32), final_addr)
 
 finished_walk_o <<= pyrtl.select(reset_i, pyrtl.Const(0, 1), (state == L2_READ))
 
-walk_finishing = (state == L2_READ)
+walk_finishing = (state != IDLE)
 valid_o <<= pyrtl.select(reset_i | ~walk_finishing, pyrtl.Const(0, 1), valid_bit)
 dirty_o <<= pyrtl.select(reset_i | ~walk_finishing, pyrtl.Const(0, 1), dirty_bit)
 ref_o <<= pyrtl.select(reset_i | ~walk_finishing, pyrtl.Const(0, 1), ref_bit)
