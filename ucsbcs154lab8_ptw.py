@@ -52,7 +52,6 @@ with pyrtl.conditional_assignment:
                 state.next |= L2_READ
                 saved_req_type_i.next |= saved_req_type_i
             with ~read_data[31]: 
-                #TODO set error outputs correctly
                 state.next |= IDLE
                 addr.next |= addr #TODO double check why not 0?
                 saved_req_type_i.next |= saved_req_type_i
@@ -87,7 +86,7 @@ walk_finished = (state == L2_READ) | ((state == L1_READ) & ~valid_bit)
 physical_addr_o <<= pyrtl.select(reset_i | ~walk_success, pyrtl.Const(0, 32), final_physical_addr)
 dirty_o <<= pyrtl.select(reset_i | ~walk_finished, pyrtl.Const(0, 1), dirty_bit)
 valid_o <<= pyrtl.select(reset_i | ~walk_finished, pyrtl.Const(0, 1), valid_bit)
-ref_o <<= pyrtl.select(reset_i | ~walk_finished, pyrtl.Const(0, 1), ref_bit)
+ref_o <<= pyrtl.select(reset_i, pyrtl.Const(0, 1), ref_bit)
 finished_walk_o <<= pyrtl.select(reset_i, pyrtl.Const(0, 1), walk_finished)
 
 #------------------------------------------------------------------------------------------
@@ -109,13 +108,23 @@ if __name__ == "__main__":
     for i in range(3):
         sim.step({
             new_req_i: 1,
-            reset_i: 0,
+            reset_i: 1,
             virtual_addr_i: 0xD0388DB3,
             req_type_i: 0
     })
+    for i in range(3):
+        sim.step({
+            new_req_i: 1,
+            reset_i: 0,
+            virtual_addr_i: 0xD0388DB3,
+            req_type_i: 0
+        })
     sim_trace.render_trace(symbol_len=20)
     assert (sim_trace.trace["physical_addr_o"][-1] == 0x61d26db3)
     assert (sim_trace.trace["error_code_o"][-1] == 0x0)
     assert (sim_trace.trace["dirty_o"][-1] == 0x0)
+    # assert (sim_trace.trace["physical_addr_o"][-1] == 0x0)
+    # assert (sim_trace.trace["error_code_o"][-1] == 0x0)
+    # assert (sim_trace.trace["dirty_o"][-1] == 0x0)
 
     print("Basic test passed!")
