@@ -194,7 +194,7 @@ with pyrtl.conditional_assignment:
                 saved_req_type_i.next |= saved_req_type_i
             with ~read_data[31]:
                 addr.next |= addr
-                state.next = IDLE
+                state.next |= IDLE
                 saved_req_type_i.next |= saved_req_type_i
         with state == L2_READ:
             addr.next |= addr
