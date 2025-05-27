@@ -158,18 +158,27 @@ page_fault = pyrtl.WireVector(bitwidth=1, name="page_fault")
 state = pyrtl.Register(bitwidth=2, name="state")
 base_register = pyrtl.Const(0x3FFBFF, bitwidth=22)
 #------------------------------------------------------------
+
 addr = pyrtl.Register(bitwidth=32, name="addr")
-saved_req_type_i = pyrtl.Register(bitwidth=1,  name="saved_req_type_i")
+saved_req_type_i = pyrtl.Register(bitwidth=1, name="saved_req_type_i")
 
 offset1 = virtual_addr_i[22:32]  
 offset2 = virtual_addr_i[12:22] 
-offset3 = virtual_addr_i[ 0:12]  
+offset3 = virtual_addr_i[0:12]  
 
 read_data = main_memory[addr]
 
 IDLE = pyrtl.Const(0b00, bitwidth=2)
 L1_READ = pyrtl.Const(0b01, bitwidth=2)
 L2_READ = pyrtl.Const(0b10, bitwidth=2)
+
+valid_bit = read_data[31]
+dirty_bit = read_data[30]
+ref_bit = read_data[29]
+writable_bit = read_data[28]
+readable_bit = read_data[27]
+
+page_fault <<= (~valid_bit) & (state != IDLE)
 
 with pyrtl.conditional_assignment:
     with reset_i:
@@ -187,45 +196,38 @@ with pyrtl.conditional_assignment:
                 state.next |= IDLE
                 saved_req_type_i.next |= saved_req_type_i
         with state == L1_READ:
-            with read_data[31]:  
+            with page_fault:
+                addr.next |= addr
+                state.next |= IDLE
+                saved_req_type_i.next |= saved_req_type_i
+            with ~page_fault:
                 next_addr = pyrtl.concat(read_data[0:22], offset2)
                 addr.next |= next_addr
                 state.next |= L2_READ
-                saved_req_type_i.next |= saved_req_type_i
-            with ~read_data[31]:
-                addr.next |= addr
-                state.next |= IDLE
                 saved_req_type_i.next |= saved_req_type_i
         with state == L2_READ:
             addr.next |= addr
             state.next |= IDLE
             saved_req_type_i.next |= saved_req_type_i
 
-valid_bit = read_data[31]
-writable_bit = read_data[28]
-readable_bit = read_data[27]
-dirty_bit = read_data[30]
-ref_bit = read_data[29]
-
-page_fault <<= (~valid_bit) & (state != IDLE)
-
-read_fault = (state == L2_READ) & (~readable_bit)  & valid_bit
-write_fault = (state == L2_READ) & ( saved_req_type_i) & (~writable_bit) & valid_bit
+read_fault = (state == L2_READ) & (~readable_bit) & valid_bit
+write_fault = (state == L2_READ) & saved_req_type_i & (~writable_bit) & valid_bit
 
 error_bits = pyrtl.concat(read_fault, write_fault, page_fault)
 error_code_o <<= pyrtl.select(reset_i, pyrtl.Const(0, 3), error_bits)
 
-ppn = read_data[0:20]
-final_phys_addr  = pyrtl.concat(ppn, offset3)
-walk_success = (state == L2_READ) & (error_bits == 0)
-physical_addr_o <<= pyrtl.select(reset_i | ~walk_success, pyrtl.Const(0, 32),final_phys_addr)
+ppn = read_data[0:20] 
+final_phys_addr = pyrtl.concat(ppn, offset3)
 
-walk_finished = walk_success | page_fault
-valid_o <<= pyrtl.select(reset_i | ~walk_finished, pyrtl.Const(0,1), valid_bit)
-dirty_o <<= pyrtl.select(reset_i | ~walk_finished, pyrtl.Const(0,1), dirty_bit)
-ref_o <<= pyrtl.select(reset_i | ~walk_finished, pyrtl.Const(0,1), ref_bit)
-finished_walk_o <<= pyrtl.select(reset_i, pyrtl.Const(0,1), walk_finished)
+walk_success = (state == L2_READ) & valid_bit & (~read_fault) & (~write_fault)
+physical_addr_o <<= pyrtl.select(reset_i | ~walk_success, pyrtl.Const(0, 32), final_phys_addr)
 
+finished_walk_o <<= pyrtl.select(reset_i, pyrtl.Const(0, 1), (state == L2_READ))
+
+walk_finishing = (state == L2_READ)
+valid_o <<= pyrtl.select(reset_i | ~walk_finishing, pyrtl.Const(0, 1), valid_bit)
+dirty_o <<= pyrtl.select(reset_i | ~walk_finishing, pyrtl.Const(0, 1), dirty_bit)
+ref_o <<= pyrtl.select(reset_i | ~walk_finishing, pyrtl.Const(0, 1), ref_bit)
 
 #------------------------------------------------------------------------------------------
 
