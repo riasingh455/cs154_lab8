@@ -1,5 +1,5 @@
 import pyrtl
-main_memory = pyrtl.MemBlock(bitwidth=32, addrwidth=32, name="main_mem")
+main_memory = pyrtl.MemBlock(bitwidth=32, addrwidth=32, name="main_mem", asynchronous=True)
 virtual_addr_i = pyrtl.Input(bitwidth=32, name="virtual_addr_i")
 new_req_i = pyrtl.Input(bitwidth=1, name="new_req_i")
 reset_i = pyrtl.Input(bitwidth=1, name="reset_i")
