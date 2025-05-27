@@ -266,3 +266,4 @@ if __name__ == "__main__":
     # assert (sim_trace.trace["dirty_o"][-1] == 0x0)
 
     print("Basic test passed!")
+    #tetstt
