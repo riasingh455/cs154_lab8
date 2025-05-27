@@ -81,12 +81,12 @@ physical_page_number = read_data[0:20]
 final_physical_addr = pyrtl.concat(physical_page_number, offset3)
 
 walk_success = (state == L2_READ) & (error_code_bits == 0)
-walk_finished = (state == L2_READ) | ((state == L1_READ) & ~valid_bit)
+walk_finished = (state == L2_READ) | ((state == L1_READ) & ~valid_bit) | page_fault
 
 physical_addr_o <<= pyrtl.select(reset_i | ~walk_success, pyrtl.Const(0, 32), final_physical_addr)
 dirty_o <<= pyrtl.select(reset_i | ~walk_finished, pyrtl.Const(0, 1), dirty_bit)
 valid_o <<= pyrtl.select(reset_i | ~walk_finished, pyrtl.Const(0, 1), valid_bit)
-ref_o <<= pyrtl.select(reset_i, pyrtl.Const(0, 1), ref_bit)
+ref_o <<= pyrtl.select(reset_i | ~walk_finished, pyrtl.Const(0, 1), ref_bit)
 finished_walk_o <<= pyrtl.select(reset_i, pyrtl.Const(0, 1), walk_finished)
 
 #------------------------------------------------------------------------------------------
