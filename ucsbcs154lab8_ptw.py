@@ -80,16 +80,13 @@ walk_success = (state == L2_READ) & valid_bit #& (~read_fault) & (~write_fault)
 physical_addr_o <<= pyrtl.select(reset_i | ~walk_success, pyrtl.Const(0, 32), final_addr)
 
 #finished_walk_o <<= pyrtl.select(reset_i, pyrtl.Const(0, 1), (state == L2_READ))
-finished = (state == L2_READ) | page_fault
-finished_walk_o <<= pyrtl.select(reset_i, pyrtl.Const(0,1), finished)
+walk_ending = ((state == L1_READ) & page_fault) | (state == L2_READ)
+finished_walk_o <<= pyrtl.select(reset_i, pyrtl.Const(0, 1), walk_ending)
 
-# walk_finishing = (state != IDLE)
-# valid_o <<= pyrtl.select(reset_i | ~walk_finishing, pyrtl.Const(0, 1), valid_bit)
-# dirty_o <<= pyrtl.select(reset_i | ~walk_finishing, pyrtl.Const(0, 1), dirty_bit)
-# ref_o <<= pyrtl.select(reset_i | ~walk_finishing, pyrtl.Const(0, 1), ref_bit)
-valid_o <<= pyrtl.select(reset_i | ~finished, pyrtl.Const(0,1), valid_bit)
-dirty_o <<= pyrtl.select(reset_i | ~finished, pyrtl.Const(0,1), dirty_bit)
-ref_o   <<= pyrtl.select(reset_i | ~finished, pyrtl.Const(0,1), ref_bit)
+walk_finishing = (state != IDLE)
+valid_o <<= pyrtl.select(reset_i | ~walk_finishing, pyrtl.Const(0, 1), valid_bit)
+dirty_o <<= pyrtl.select(reset_i | ~walk_finishing, pyrtl.Const(0, 1), dirty_bit)
+ref_o <<= pyrtl.select(reset_i | ~walk_finishing, pyrtl.Const(0, 1), ref_bit)
 
 #------------------------------------------------------------------------------------------
 
